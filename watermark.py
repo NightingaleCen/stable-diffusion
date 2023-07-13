@@ -87,7 +87,7 @@ def get_parser(**parser_kwargs):
         "-s",
         "--size",
         type=int,
-        default=256,
+        default=512,
         help="resize the image to a certain size",
     )
     parser.add_argument(
@@ -116,10 +116,8 @@ class WatermarkPGD:
         self.cond = "a painting"
 
     def __call__(self, x):
-        image = x["image"].clone().detach().requires_grad_(True).to(self.device)
-        watermark = (
-            x["watermark"].clone().detach().requires_grad_(True).to(self.device)
-        )
+        image = x["image"].clone().detach().to(self.device).requires_grad_(True)
+        watermark = x["watermark"].clone().detach().to(self.device).requires_grad_(True)
         x = {"image": image, "watermark": watermark}
         loss_history = []
 
@@ -137,7 +135,7 @@ class WatermarkPGD:
             x["image"] = image.detach().requires_grad_(True)
 
         plt.plot(np.arange(len(loss_history)), loss_history)
-        plt.show()
+        plt.savefig("curve.png")
         return x["image"]
 
 
