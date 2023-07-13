@@ -1,2 +1,8 @@
-watermark.jpeg
+*.jpeg
 images/*
+*.ckpt
+src
+__pycache__
+latent_diffusion.egg-info
+*.jpg
+.DS_Store

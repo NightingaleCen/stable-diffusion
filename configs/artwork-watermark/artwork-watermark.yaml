@@ -2,13 +2,14 @@ model:
   base_learning_rate: 1.0e-04
   target: ldm.models.diffusion.ddpm.WatermarkDiffusion
   params:
-    checkpoint: ""
+    ckpt_path: "sd-v1-4.ckpt"
     linear_start: 0.00085
     linear_end: 0.0120
     num_timesteps_cond: 1
     log_every_t: 200
     timesteps: 1000
-    first_stage_key: image
+    first_stage_key: "image"
+    cond_stage_key: "txt"
     image_size: 64
     channels: 4
     cond_stage_trainable: false
@@ -57,4 +58,7 @@ model:
         lossconfig:
           target: torch.nn.Identity
 
-    cond_stage_config: __is_unconditional__
+    cond_stage_config:
+      target: ldm.modules.encoders.modules.FrozenCLIPEmbedder
+      params:
+        device: "cpu" #TODO: remove?

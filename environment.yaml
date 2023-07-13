@@ -2,22 +2,25 @@ name: ldm
 channels:
   - pytorch
   - defaults
+  - conda-forge
 dependencies:
   - python=3.8.5
-  - pip=20.3
-  - cudatoolkit=11.3
-  - pytorch=1.11.0
-  - torchvision=0.12.0
-  - numpy=1.19.2
+  - pip
+  #- cudatoolkit=11.3
+  - pytorch
+  - torchvision
+  - numpy
   - pip:
     - albumentations==0.4.3
     - diffusers
-    - opencv-python==4.1.2.30
+    #- opencv-python==4.1.2.30
+    - opencv-python
     - pudb==2019.2
     - invisible-watermark
     - imageio==2.9.0
     - imageio-ffmpeg==0.4.2
-    - pytorch-lightning==1.4.2
+    #- pytorch-lightning==1.4.2
+    - pytorch-lightning
     - omegaconf==2.1.1
     - test-tube>=0.7.5
     - streamlit>=0.73.1

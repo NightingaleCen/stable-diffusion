@@ -1866,59 +1866,104 @@ class DiffusionWrapper(pl.LightningModule):
 class WatermarkDiffusion(LatentDiffusion):
     """main class for watermarking"""
 
-    def __init__(self, checkpoint, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.model.load_from_checkpoint(checkpoint)
-        for param in self.model.parameters():
-            param.requires_grad = False
+        # self.model.load_from_checkpoint(checkpoint, *args, **kwargs) # TODO: rewrite this and move all checkpoint stuff here
+        # for param in self.model.parameters():
+        # param.requires_grad = False
         self.model.eval()
 
-    def forward(self, x, *args, **kwargs):
+    def get_input(self, batch, k):
+        x = super(LatentDiffusion, self).get_input(batch, k)  # DDPM.get_input
+        encoder_posterior = self.encode_first_stage(x)
+        x = self.get_first_stage_encoding(encoder_posterior).to(self.device)
+        return x
+
+    def forward(self, x, cond, *args, **kwargs):
         t = torch.randint(
-            0, self.num_timesteps, (x.shape[0],), device=self.device
+            0, self.num_timesteps, (x["image"].shape[0],), device=self.device
         ).long()
 
-        image, _ = self.get_input(x, "image")
+        image = self.get_input(x, "image")
         watermark = self.get_input(x, "watermark")
 
-        return self.p_losses(image, watermark, t, *args, **kwargs)
+        c = self.get_learned_conditioning(cond)
 
-    def p_losses(self, x_start, watermark, t, noise_x=None, noise_watermark=None):
+        return self.p_losses(image, watermark, c, t, *args, **kwargs)
+
+    def p_losses(self, x_start, watermark, c, t, noise_x=None, noise_watermark=None):
         noise_x = default(noise_x, lambda: torch.randn_like(x_start))
         noise_watermark = default(noise_watermark, lambda: torch.randn_like(watermark))
 
+        # TODO: examine this shit thoroughly if something's wrong
         x_noisy = self.q_sample(x_start=x_start, t=t, noise=noise_x)
-        watermark_noisy = self.q_sample(x_start=watermark, t=t, noise=noise_watermark)
+        watermark_noisy = self.q_sample(
+            x_start=watermark, t=t, noise=noise_watermark
+        )  # TODO: try different noise
+        # watermark_noisy = self.q_sample(x_start=watermark, t=t, noise=noise_x)
 
         # carefully choose your model_out and target here
-        model_out = self.model(watermark_noisy, t)
+        model_out_x = self.apply_model(x_noisy, t, c)
+        model_out_watermark = self.apply_model(watermark_noisy, t, c)
 
-        loss_dict = {}
-        if self.parameterization == "eps":
-            target = noise_x
-        elif self.parameterization == "x0":
-            target = x_start
-        else:
-            raise NotImplementedError(
-                f"Paramterization {self.parameterization} not yet supported"
-            )
+        loss = self.get_loss(model_out_x, model_out_watermark, mean=False).mean(
+            dim=[1, 2, 3]
+        )
 
-        loss = self.get_loss(model_out, target, mean=False).mean(dim=[1, 2, 3])
-
-        log_prefix = "train" if self.training else "val"
-
-        loss_dict.update({f"{log_prefix}/loss_simple": loss.mean()})
         loss_simple = loss.mean() * self.l_simple_weight
 
         loss_vlb = (self.lvlb_weights[t] * loss).mean()
-        loss_dict.update({f"{log_prefix}/loss_vlb": loss_vlb})
 
         loss = loss_simple + self.original_elbo_weight * loss_vlb
 
-        loss_dict.update({f"{log_prefix}/loss": loss})
+        return loss
 
-        return loss, loss_dict
+    def encode_first_stage(self, x):
+        """same as the one in LatentDiffusion but without decorator"""
+        if hasattr(self, "split_input_params"):
+            if self.split_input_params["patch_distributed_vq"]:
+                ks = self.split_input_params["ks"]  # eg. (128, 128)
+                stride = self.split_input_params["stride"]  # eg. (64, 64)
+                df = self.split_input_params["vqf"]
+                self.split_input_params["original_image_size"] = x.shape[-2:]
+                bs, nc, h, w = x.shape
+                if ks[0] > h or ks[1] > w:
+                    ks = (min(ks[0], h), min(ks[1], w))
+                    print("reducing Kernel")
+
+                if stride[0] > h or stride[1] > w:
+                    stride = (min(stride[0], h), min(stride[1], w))
+                    print("reducing stride")
+
+                fold, unfold, normalization, weighting = self.get_fold_unfold(
+                    x, ks, stride, df=df
+                )
+                z = unfold(x)  # (bn, nc * prod(**ks), L)
+                # Reshape to img shape
+                z = z.view(
+                    (z.shape[0], -1, ks[0], ks[1], z.shape[-1])
+                )  # (bn, nc, ks[0], ks[1], L )
+
+                output_list = [
+                    self.first_stage_model.encode(z[:, :, :, :, i])
+                    for i in range(z.shape[-1])
+                ]
+
+                o = torch.stack(output_list, axis=-1)
+                o = o * weighting
+
+                # Reverse reshape to img shape
+                o = o.view((o.shape[0], -1, o.shape[-1]))  # (bn, nc * ks[0] * ks[1], L)
+                # stitch crops together
+                decoded = fold(o)
+                decoded = decoded / normalization
+                return decoded
+
+            else:
+                return self.first_stage_model.encode(x)
+        else:
+            return self.first_stage_model.encode(x)
 
 
 class Layout2ImgDiffusion(LatentDiffusion):

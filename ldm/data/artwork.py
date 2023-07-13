@@ -28,7 +28,6 @@ class ArtworkDataset(Dataset):
         self._length = len(self.images)
         self.size = size
         self.interpolation = {
-            "linear": PIL.Image.LINEAR,
             "bilinear": PIL.Image.BILINEAR,
             "bicubic": PIL.Image.BICUBIC,
             "lanczos": PIL.Image.LANCZOS,
@@ -63,7 +62,7 @@ class ArtworkDataset(Dataset):
 
     def _preprocess(self, img):
         # default to score-sde preprocessing
-        img = np.array(image).astype(np.uint8)
+        img = np.array(img).astype(np.uint8)
         crop = min(img.shape[0], img.shape[1])
         h, w = img.shape[0], img.shape[1]
         img = img[(h - crop) // 2 : (h + crop) // 2, (w - crop) // 2 : (w + crop) // 2]
