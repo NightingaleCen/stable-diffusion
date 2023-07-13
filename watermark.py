@@ -118,7 +118,7 @@ class WatermarkPGD:
     def __call__(self, x):
         image = x["image"].clone().detach().requires_grad_(True).to(self.device)
         watermark = (
-            x["watermark"].clone().detach().requires_grad_(False).to(self.device)
+            x["watermark"].clone().detach().requires_grad_(True).to(self.device)
         )
         x = {"image": image, "watermark": watermark}
         loss_history = []
@@ -200,7 +200,8 @@ if __name__ == "__main__":
     config = OmegaConf.load("configs/artwork-watermark/artwork-watermark.yaml")
 
     # model
-    model = instantiate_from_config(config.model)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = instantiate_from_config(config.model).to(device)
     watermark = WatermarkPGD(model=model, eps=opt.eps, alpha=opt.alpha, iters=opt.iters)
 
     # data

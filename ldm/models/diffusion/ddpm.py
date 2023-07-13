@@ -1870,8 +1870,6 @@ class WatermarkDiffusion(LatentDiffusion):
         super().__init__(*args, **kwargs)
 
         # self.model.load_from_checkpoint(checkpoint, *args, **kwargs) # TODO: rewrite this and move all checkpoint stuff here
-        # for param in self.model.parameters():
-        # param.requires_grad = False
         self.model.eval()
 
     def get_input(self, batch, k):

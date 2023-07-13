@@ -6,3 +6,4 @@ __pycache__
 latent_diffusion.egg-info
 *.jpg
 .DS_Store
+openai/clip-vit-large-patch14
